@@ -111,3 +111,36 @@ export const chatHandler = async (request: Request, h: ResponseToolkit) => {
     return h.response({ status: "fail", message: error.message }).code(400);
   }
 };
+
+export const getMessagesByRoomIDHandler = async (
+  request: Request,
+  h: ResponseToolkit
+) => {
+  const userId = request.plugins.authUser?.id ?? 0;
+  const { roomId } = request.params;
+
+  const { owner_id } = await chatRepo.getRoomByID(pool, roomId);
+
+  if (owner_id != userId) {
+    return h
+      .response({
+        status: "error",
+        message: `You are not permit to get message in room ${roomId}`,
+      })
+      .code(401);
+  }
+
+  const messages = await chatRepo.getMessagesByRoomID(pool, roomId);
+
+  const formattedMessages = messages.map((message) => ({
+    sender_type: message.sender_type,
+    content: message.content,
+  }));
+
+  return h
+    .response({
+      status: "success",
+      data: formattedMessages,
+    })
+    .code(200);
+};
