@@ -3,7 +3,7 @@ import "@hapi/hapi";
 declare module "@hapi/hapi" {
   interface PluginsStates {
     authUser?: {
-      id: string;
+      id: number;
       email: string;
       name: string;
     };

@@ -6,7 +6,6 @@ import { generateJWT } from "../helper/jwt";
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
 export default class AuthRepository {
-  // Fungsi untuk signup user
   async signUp(db: Pool, user: UserModel): Promise<any> {
     try {
       // Cek apakah email sudah terdaftar

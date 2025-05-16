@@ -2,6 +2,7 @@
 import Hapi from "@hapi/hapi";
 import { authRoutes } from "./routes/auth_routes";
 import { verifyToken } from "./middleware/auth";
+import { chatRoutes } from "./routes/chat_routes";
 
 const init = async () => {
   const server = Hapi.server({
@@ -12,6 +13,7 @@ const init = async () => {
   // Register routes
   server.route([
     ...authRoutes,
+    ...chatRoutes,
     {
       method: "GET",
       path: "/",
