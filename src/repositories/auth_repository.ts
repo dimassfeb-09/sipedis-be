@@ -88,4 +88,28 @@ export default class AuthRepository {
       }
     }
   }
+
+  async getUserById(db: Pool, userId: number): Promise<any> {
+    try {
+      const result = await db.query(
+        "SELECT id, email, name FROM users WHERE id = $1",
+        [userId]
+      );
+
+      const user = result.rows[0];
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      return user;
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Get user by ID failed:", error.message);
+        throw new Error(error.message || "Failed to get user");
+      } else {
+        console.error("Get user by ID failed:", error);
+        throw new Error("Failed to get user");
+      }
+    }
+  }
 }

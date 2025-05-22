@@ -1,4 +1,5 @@
-// src/server.ts
+import Inert from "@hapi/inert";
+import path from "path";
 import Hapi from "@hapi/hapi";
 import { authRoutes } from "./routes/auth_routes";
 import { verifyToken } from "./middleware/auth";
@@ -8,7 +9,19 @@ const init = async () => {
   const server = Hapi.server({
     port: 8080,
     host: "localhost",
+    routes: {
+      cors: {
+        origin: ["*"], // Mengizinkan semua origin
+        additionalHeaders: [
+          "cache-control",
+          "x-requested-with",
+          "authorization",
+        ],
+      },
+    },
   });
+
+  await server.register(Inert);
 
   // Register routes
   server.route([
@@ -23,12 +36,23 @@ const init = async () => {
 
   server.route({
     method: "GET",
+    path: "/images/{param*}",
+    handler: {
+      directory: {
+        path: path.join(__dirname, "uploads"),
+        listing: false,
+        index: false,
+      },
+    },
+  });
+
+  server.route({
+    method: "GET",
     path: "/protected-data",
     options: {
-      pre: [{ method: verifyToken }], // Memasukkan middleware untuk memverifikasi JWT
+      pre: [{ method: verifyToken }],
     },
     handler: (request, h) => {
-      // Mengakses data yang disimpan di request.plugins.authUser oleh middleware
       const user = request.plugins.authUser;
       return { message: "Welcome to protected data", data: user };
     },

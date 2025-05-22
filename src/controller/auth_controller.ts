@@ -24,3 +24,17 @@ export const signInHandler = async (request: Request, h: ResponseToolkit) => {
     return h.response({ status: "fail", message: error.message }).code(401);
   }
 };
+
+export const userDetailHandler = async (
+  request: Request,
+  h: ResponseToolkit
+) => {
+  const userId = request.plugins.authUser?.id ?? 0;
+
+  try {
+    const data = await authRepo.getUserById(pool, userId);
+    return h.response({ status: "success", data: data }).code(200);
+  } catch (error: any) {
+    return h.response({ status: "fail", message: error.message }).code(401);
+  }
+};

@@ -11,14 +11,13 @@ const chatRepo = new ChatRepository();
 export const chatHandler = async (request: Request, h: ResponseToolkit) => {
   const userId = request.plugins.authUser?.id ?? 0;
 
-  const { roomId, content, imageBase64 } = request.payload as {
+  const { roomId, content, image } = request.payload as {
     roomId?: number;
     content?: string;
-    imageBase64?: string;
+    image?: string;
   };
 
   try {
-    // Pastikan room ada / buat baru jika belum ada
     let currentRoomId = roomId;
     if (roomId) {
       const room = await chatRepo.getRoomByID(pool, roomId.toString());
@@ -29,11 +28,12 @@ export const chatHandler = async (request: Request, h: ResponseToolkit) => {
       currentRoomId = await chatRepo.createRoom(pool, userId);
     }
 
-    // Proses isi pesan, termasuk image (opsional)
-    let messageContent = content || "";
+    let messageContent = content?.trim() || "";
+    let imageUrl = null;
 
-    if (imageBase64) {
-      const matches = imageBase64.match(/^data:(image\/\w+);base64,(.+)$/);
+    // Jika ada gambar, simpan file dan buat imageUrl
+    if (image) {
+      const matches = image.match(/^data:(image\/\w+);base64,(.+)$/);
       if (!matches) throw new Error("Invalid base64 image format");
 
       const ext = matches[1].split("/")[1];
@@ -44,66 +44,59 @@ export const chatHandler = async (request: Request, h: ResponseToolkit) => {
       const filepath = path.join(__dirname, "..", "uploads", filename);
       await fs.promises.writeFile(filepath, buffer);
 
-      const imageUrl = `/uploads/${filename}`;
-      messageContent += messageContent
-        ? `\nImage: ${imageUrl}`
-        : `Image: ${imageUrl}`;
+      imageUrl = filename; // hanya simpan nama file
     }
 
-    if (!messageContent.trim()) throw new Error("Message content is empty");
+    // Validasi: harus ada minimal content atau image
+    if (!messageContent && !imageUrl) {
+      throw new Error("Message content and image cannot both be empty");
+    }
 
-    // Simpan pesan user ke DB
     const userMessage = await chatRepo.createMessage(pool, {
       roomId: currentRoomId!,
       userId,
-      content: messageContent,
+      content: messageContent || "",
+      images: imageUrl,
       senderType: "user",
     });
 
-    // Ambil semua pesan sebelumnya dari DB sebagai konteks
-    const previousMessages = await chatRepo.getMessagesByRoomID(
-      pool,
-      currentRoomId!
-    );
+    const response = await axios.post("http://localhost:3001/chat", {
+      image: image?.split("data:image/png;base64,")[1],
+      query: messageContent,
+    });
 
-    const formattedMessages = previousMessages.map((m) => ({
-      user_type: m.sender_type,
-      message: m.content,
-    }));
+    const {
+      class_name,
+      confidence,
+      assistant,
+    }: {
+      class_name: string | null;
+      confidence: string | null;
+      assistant: string;
+    } = response.data;
 
-    console.log(formattedMessages); // ini context
+    const botReply = assistant;
 
-    // Kirim ke backend AI via POST
-    // const aiResponse = await axios.post(
-    //   "http://backend-ai.example.com/api/chat",
-    //   formattedMessages,
-    //   {
-    //     headers: { "Content-Type": "application/json" },
-    //   }
-    // );
-
-    const aiResponse = {
-      message: "ashjdfasghdfas asjhdgasjhdas kocakhgdfasd",
-    };
-
-    const botReply = aiResponse.message;
-
-    // Simpan balasan bot ke DB
     const botMessage = await chatRepo.createMessage(pool, {
       roomId: currentRoomId!,
       userId: 0,
       content: botReply,
       senderType: "bot",
+      images: null,
     });
-
-    const replyBot = botMessage.content;
 
     return h
       .response({
         status: "success",
         data: {
           roomId: currentRoomId,
-          content: replyBot,
+          content: botMessage.content,
+          additional: image
+            ? {
+                className: class_name,
+                confidence: confidence,
+              }
+            : null,
         },
       })
       .code(201);
@@ -135,6 +128,9 @@ export const getMessagesByRoomIDHandler = async (
   const formattedMessages = messages.map((message) => ({
     sender_type: message.sender_type,
     content: message.content,
+    imagesUrl: message.images
+      ? `http://localhost:8080/images/${message.images}`
+      : null,
   }));
 
   return h
@@ -143,4 +139,30 @@ export const getMessagesByRoomIDHandler = async (
       data: formattedMessages,
     })
     .code(200);
+};
+
+export const getRoomsByUserIdHandler = async (
+  request: Request,
+  h: ResponseToolkit
+) => {
+  try {
+    const userId = request.plugins.authUser?.id ?? 0;
+
+    const result = await chatRepo.getRoomsByUserId(pool, userId);
+
+    return h
+      .response({
+        status: "success",
+        data: result.rows,
+      })
+      .code(200);
+  } catch (err: any) {
+    console.error("Failed to get chat rooms:", err);
+    return h
+      .response({
+        status: "fail",
+        message: err.message || "Internal Server Error",
+      })
+      .code(500);
+  }
 };
