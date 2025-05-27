@@ -1,6 +1,6 @@
 import { UserModel } from "../model/User";
 import { Pool } from "pg";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { generateJWT } from "../helper/jwt";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
