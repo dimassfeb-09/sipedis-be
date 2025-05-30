@@ -8,10 +8,10 @@ import { chatRoutes } from "./routes/chat_routes";
 const init = async () => {
   const server = Hapi.server({
     port: 8080,
-    host: "0.0.0.0",
+    host: "localhost",
     routes: {
       cors: {
-        origin: ["*"], // Mengizinkan semua origin
+        origin: ["*"],
         additionalHeaders: [
           "cache-control",
           "x-requested-with",

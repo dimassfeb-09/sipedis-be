@@ -19,6 +19,8 @@ export const chatHandler = async (request: Request, h: ResponseToolkit) => {
 
   try {
     let currentRoomId = roomId;
+
+    // Validasi room jika diberikan
     if (roomId) {
       const room = await chatRepo.getRoomByID(pool, roomId.toString());
       if (!room) {
@@ -28,54 +30,58 @@ export const chatHandler = async (request: Request, h: ResponseToolkit) => {
       currentRoomId = await chatRepo.createRoom(pool, userId);
     }
 
-    let messageContent = content?.trim() || "";
-    let imageUrl = null;
+    const trimmedContent = content?.trim() || "";
+    let imageUrl: string | null = null;
 
-    // Jika ada gambar, simpan file dan buat imageUrl
+    // Proses gambar base64 jika ada
     if (image) {
       const matches = image.match(/^data:(image\/\w+);base64,(.+)$/);
       if (!matches) throw new Error("Invalid base64 image format");
 
-      const ext = matches[1].split("/")[1];
-      const data = matches[2];
-      const buffer = Buffer.from(data, "base64");
+      const mimeType = matches[1];
+      const base64Data = matches[2];
+
+      const ext = mimeType.split("/")[1];
+      const buffer = Buffer.from(base64Data, "base64");
 
       const filename = `${uuidv4()}.${ext}`;
       const filepath = path.join(__dirname, "..", "uploads", filename);
       await fs.promises.writeFile(filepath, buffer);
 
-      imageUrl = filename; // hanya simpan nama file
+      imageUrl = filename;
     }
 
-    // Validasi: harus ada minimal content atau image
-    if (!messageContent && !imageUrl) {
+    // Validasi bahwa minimal content atau image harus ada
+    if (!trimmedContent && !imageUrl) {
       throw new Error("Message content and image cannot both be empty");
     }
 
-    const userMessage = await chatRepo.createMessage(pool, {
+    // Simpan pesan dari user
+    await chatRepo.createMessage(pool, {
       roomId: currentRoomId!,
       userId,
-      content: messageContent || "",
+      content: trimmedContent,
       images: imageUrl,
       senderType: "user",
     });
 
-    const response = await axios.post("http://localhost:3001/chat", {
-      image: image?.split("data:image/png;base64,")[1],
-      query: messageContent,
-    });
+    // Panggil API ML
+    const response = await axios.post(
+      "https://sipedis-ml-production.up.railway.app/chat",
+      {
+        image: image?.split("base64,")[1] || null,
+        query: trimmedContent,
+      }
+    );
 
     const {
-      class_name,
-      confidence,
-      assistant,
-    }: {
-      class_name: string | null;
-      confidence: string | null;
-      assistant: string;
-    } = response.data;
+      class_name = null,
+      confidence = null,
+      assistant = "",
+    } = response.data.data ?? {};
 
-    const botReply = assistant;
+    const botReply =
+      assistant.trim() || "Maaf, saya tidak dapat memberikan jawaban saat ini.";
 
     const botMessage = await chatRepo.createMessage(pool, {
       roomId: currentRoomId!,
@@ -101,6 +107,7 @@ export const chatHandler = async (request: Request, h: ResponseToolkit) => {
       })
       .code(201);
   } catch (error: any) {
+    console.error("Chat handler error:", error.message);
     return h.response({ status: "fail", message: error.message }).code(400);
   }
 };
