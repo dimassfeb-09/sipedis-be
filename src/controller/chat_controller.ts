@@ -136,7 +136,7 @@ export const getMessagesByRoomIDHandler = async (
     sender_type: message.sender_type,
     content: message.content,
     imagesUrl: message.images
-      ? `http://localhost:8080/images/${message.images}`
+      ? `https://sipedis-be-production.up.railway.app/images/${message.images}`
       : null,
   }));
 
